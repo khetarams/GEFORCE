@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GEFOREC</title>
+  <style>
+    :root {
+      --primary-bg: #0f172a;
+      --secondary-bg: #1e293b;
+      --text-color: #f1f5f9;
+      --accent: #38bdf8;
+    }
+    .light-theme {
+      --primary-bg: #ffffff;
+      --secondary-bg: #f1f5f9;
+      --text-color: #0f172a;
+      --accent: #2563eb;
+    }
+    .blue-theme {
+      --primary-bg: #1e3a8a;
+      --secondary-bg: #3b82f6;
+      --text-color: #e0f2fe;
+      --accent: #facc15;
+    }
+    body {
+      background-color: var(--primary-bg);
+      color: var(--text-color);
+      font-family: 'Segoe UI', sans-serif;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      transition: background-color 0.3s, color 0.3s;
+    }
+    .sidebar {
+      width: 240px;
+      background-color: var(--secondary-bg);
+      padding: 20px;
+    }
+    .main {
+      flex-grow: 1;
+      padding: 20px;
+      background-color: var(--primary-bg);
+    }
+    input, textarea, button {
+      padding: 10px;
+      border-radius: 6px;
+      border: none;
+      margin: 5px 0;
+      font-size: 16px;
+    }
+    input[type="text"], textarea {
+      width: 100%;
+      background-color: #e2e8f0;
+    }
+    button {
+      background-color: var(--accent);
+      color: black;
+      cursor: pointer;
+      margin-right: 5px;
+    }
+    .group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 6px;
+      margin: 4px 0;
+      color: black;
+    }
+    .group span {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="sidebar">
+    <h2>GEFOREC</h2>
+    <input id="groupInput" type="text" placeholder="Add Group" />
+    <button onclick="addGroup()">➕</button>
+    <div id="groupList"></div>
+    <button onclick="toggleTheme()">Toggle Theme</button>
+  </div>
+  <div class="main">
+    <input id="urlInput" type="text" placeholder="Paste URL and press Enter" onkeypress="handleKeyPress(event)" />
+    <div id="urlList"></div>
+    <button onclick="openAll()">Open All URLs</button>
+    <button onclick="getShareableLink()">Get Shareable Link</button>
+    <button onclick="exportData()">Export Data</button>
+    <button onclick="importData()">Import Data</button>
+    <textarea id="dataBox" placeholder="Paste exported data here..."></textarea>
+  </div>
+  <script>
+    let currentGroup = '';
+    let data = {};
+    let themeIndex = 0;
+    const themes = ['dark-theme', 'light-theme', 'blue-theme'];
+
+    function toggleTheme() {
+      document.body.classList.remove(...themes);
+      themeIndex = (themeIndex + 1) % themes.length;
+      document.body.classList.add(themes[themeIndex]);
+      localStorage.setItem('geforecTheme', themes[themeIndex]);
+    }
+
+    function isValidURL(str) {
+      try {
+        new URL(str);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+
+    function addGroup() {
+      const input = document.getElementById('groupInput');
+      const name = input.value.trim();
+      if (name && !data[name]) {
+        data[name] = [];
+        currentGroup = name;
+        input.value = '';
+        renderGroups();
+        renderURLs();
+        saveToLocal();
+      }
+    }
+
+    function renderGroups() {
+      const list = document.getElementById('groupList');
+      list.innerHTML = '';
+      Object.keys(data).forEach(name => {
+        const div = document.createElement('div');
+        div.className = 'group';
+        div.innerHTML = `
+          <span onclick="switchGroup('${name}')">${name}</span>
+          <div>
+            <button onclick="renameGroup('${name}')">✏️</button>
+            <button onclick="deleteGroup('${name}')">🗑️</button>
+          </div>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function renameGroup(oldName) {
+      const newName = prompt("Rename group", oldName);
+      if (newName && !data[newName]) {
+        data[newName] = data[oldName];
+        delete data[oldName];
+        if (currentGroup === oldName) currentGroup = newName;
+        renderGroups();
+        renderURLs();
+        saveToLocal();
+      }
+    }
+
+    function deleteGroup(name) {
+      if (confirm(`Delete group "${name}"?`)) {
+        delete data[name];
+        if (currentGroup === name) currentGroup = Object.keys(data)[0] || '';
+        renderGroups();
+        renderURLs();
+        saveToLocal();
+      }
+    }
+
+    function switchGroup(name) {
+      currentGroup = name;
+      renderURLs();
+    }
+
+    function handleKeyPress(e) {
+      if (e.key === 'Enter') {
+        const url = e.target.value.trim();
+        if (url && currentGroup && isValidURL(url)) {
+          data[currentGroup].push(url);
+          e.target.value = '';
+          renderURLs();
+          saveToLocal();
+        } else if (!isValidURL(url)) {
+          alert("Please enter a valid URL.");
+        }
+      }
+    }
+
+    function renderURLs() {
+      const list = document.getElementById('urlList');
+      list.innerHTML = '';
+      (data[currentGroup] || []).forEach((url, i) => {
+        const div = document.createElement('div');
+        div.className = 'group';
+        div.innerHTML = `
+          <a href="${url}" target="_blank">${url}</a>
+          <button onclick="removeURL(${i})">🗑️</button>
+        `;
+        list.appendChild(div);
+      });
+    }
+
+    function removeURL(index) {
+      data[currentGroup].splice(index, 1);
+      renderURLs();
+      saveToLocal();
+    }
+
+    function openAll() {
+      (data[currentGroup] || []).forEach(url => {
+        window.open(url, '_blank');
+      });
+    }
+
+    function exportData() {
+      document.getElementById('dataBox').value = JSON.stringify(data);
+    }
+
+    function importData() {
+      try {
+        const input = document.getElementById('dataBox').value;
+        const imported = JSON.parse(input);
+        data = imported;
+        currentGroup = Object.keys(data)[0] || '';
+        renderGroups();
+        renderURLs();
+        saveToLocal();
+      } catch (err) {
+        alert('Invalid data');
+      }
+    }
+
+    function getShareableLink() {
+      const base64 = btoa(JSON.stringify(data));
+      const url = `${window.location.origin}${window.location.pathname}?data=${base64}`;
+      navigator.clipboard.writeText(url).then(() => alert('Link copied!'));
+    }
+
+    function loadSharedData() {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('data')) {
+        try {
+          data = JSON.parse(atob(params.get('data')));
+          currentGroup = Object.keys(data)[0] || '';
+        } catch {}
+      }
+    }
+
+    function saveToLocal() {
+      localStorage.setItem('geforecData', JSON.stringify(data));
+    }
+
+    function loadFromLocal() {
+      const saved = localStorage.getItem('geforecData');
+      if (saved) {
+        data = JSON.parse(saved);
+        currentGroup = Object.keys(data)[0] || '';
+      }
+    }
+
+    function loadTheme() {
+      const savedTheme = localStorage.getItem('geforecTheme');
+      if (themes.includes(savedTheme)) {
+        document.body.classList.add(savedTheme);
+        themeIndex = themes.indexOf(savedTheme);
+      }
+    }
+
+    window.onload = () => {
+      loadSharedData();
+      loadFromLocal();
+      loadTheme();
+      renderGroups();
+      renderURLs();
+    };
+  </script>
+</body>
+</html>
